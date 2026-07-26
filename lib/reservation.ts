@@ -1,4 +1,4 @@
-import { prisma } from "./prisma";
+import { prisma, type PrismaSeat } from "./prisma";
 
 export class BookingError extends Error {
   constructor(
@@ -33,33 +33,25 @@ export async function createReservation(
     throw new BookingError("NO_SEATS", "At least one seat must be selected");
   }
 
-  // Validate seat IDs exist and get their labels
-  const seats = await prisma.seat.findMany({
+  const seats: PrismaSeat[] = await prisma.seat.findMany({
     where: { id: { in: seatIds } },
   });
 
   if (seats.length !== seatIds.length) {
-    const foundIds = new Set(seats.map((s) => s.id));
-    const missing = seatIds.filter((id) => !foundIds.has(id));
+    const foundIds = new Set(seats.map((s: PrismaSeat) => s.id));
+    const missing = seatIds.filter((id: string) => !foundIds.has(id));
     throw new BookingError(
       "INVALID_SEATS",
       `Invalid seat IDs: ${missing.join(", ")}`
     );
   }
 
-  // Use a transaction to atomically create the reservation.
-  // The UNIQUE constraint on ReservationSeat.seatId prevents double-booking.
-  // If any seat is already reserved, the transaction will fail and rollback.
   try {
     const result = await prisma.$transaction(async (tx) => {
-      // Create reservation header
       const reservation = await tx.reservation.create({
         data: { userId },
       });
 
-      // Attempt to insert all seat reservations.
-      // If any seatId already exists in ReservationSeat, this will throw
-      // a P2002 unique constraint error, causing the entire transaction to rollback.
       for (const seatId of seatIds) {
         await tx.reservationSeat.create({
           data: {
@@ -74,11 +66,10 @@ export async function createReservation(
 
     return {
       reservationId: result.id,
-      seatLabels: seats.map((s) => s.seatLabel),
+      seatLabels: seats.map((s: PrismaSeat) => s.seatLabel),
       createdAt: result.createdAt,
     };
   } catch (error: unknown) {
-    // Prisma P2002 = unique constraint violation (seat already reserved)
     if (
       error &&
       typeof error === "object" &&
@@ -95,26 +86,20 @@ export async function createReservation(
   }
 }
 
-interface SeatWithUser {
+interface SeatReservation {
   id: string;
-  seatLabel: string;
-  rowChar: string;
-  seatNumber: number;
-  reservations: {
+  reservation: {
     id: string;
-    reservation: {
-      id: string;
-      createdAt: Date;
-      user: { id: string; email: string; name: string } | null;
-    } | null;
-  }[];
+    createdAt: Date;
+    user: { id: string; email: string; name: string } | null;
+  } | null;
 }
 
 /**
  * Get all seats with their reservation status.
  */
 export async function getAllSeats() {
-  const seats: SeatWithUser[] = await prisma.seat.findMany({
+  const seats = (await prisma.seat.findMany({
     orderBy: [{ rowChar: "asc" }, { seatNumber: "asc" }],
     include: {
       reservations: {
@@ -130,9 +115,9 @@ export async function getAllSeats() {
         },
       },
     },
-  });
+  })) as unknown as (PrismaSeat & { reservations: SeatReservation[] })[];
 
-  return seats.map((seat) => {
+  return seats.map((seat: PrismaSeat & { reservations: SeatReservation[] }) => {
     const activeReservation = seat.reservations[0]?.reservation;
     return {
       id: seat.id,

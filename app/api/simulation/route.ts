@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma, type PrismaSeatWithRelations } from "@/lib/prisma";
 import { createReservation, BookingError } from "@/lib/reservation";
 import { broadcastSeatUpdate } from "@/lib/socket";
 
-interface SeatWithReservation {
-  id: string;
-  seatLabel: string;
-  rowChar: string;
-  seatNumber: number;
-  reservations: { id: string }[];
-}
-
+/**
+ * High-Concurrency Simulation Endpoint.
+ *
+ * Simulates N concurrent users attempting to reserve seats.
+ * The simulation directly exercises the shared createReservation()
+ * function — the same function called by both the frontend API
+ * (/api/reservations) and partner API (/api/partner/reservations).
+ *
+ * This proves that the concurrency guarantee (UNIQUE constraint on
+ * ReservationSeat.seatId) holds under high contention, regardless
+ * of which entry point triggers the reservation.
+ *
+ * The simulation creates deliberate contention by having 20% of
+ * users target the same "hot" seats (A1-A5).
+ */
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
@@ -18,14 +25,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const concurrency: number = body.concurrency || 100;
 
-    const allSeats: SeatWithReservation[] = await prisma.seat.findMany({
+    const allSeats: PrismaSeatWithRelations[] = await prisma.seat.findMany({
       include: {
         reservations: { take: 1 },
       },
     });
 
     const availableSeats = allSeats.filter(
-      (s) => s.reservations.length === 0
+      (s: PrismaSeatWithRelations) => s.reservations.length === 0
     );
 
     if (availableSeats.length === 0) {
@@ -37,7 +44,7 @@ export async function POST(request: NextRequest) {
 
     const bcrypt = await import("bcryptjs");
     const timestamp = Date.now();
-    const simUsers: { id: string; email: string; name: string }[] = [];
+    const simUsers: { id: string; email: string }[] = [];
 
     for (let i = 0; i < concurrency; i++) {
       const email = `sim-user-${i}-${timestamp}@test.local`;
@@ -57,7 +64,7 @@ export async function POST(request: NextRequest) {
         availableSeats.length
       );
 
-      let seatsToReserve: SeatWithReservation[];
+      let seatsToReserve: PrismaSeatWithRelations[];
       if (index < concurrency * 0.2) {
         const hotSeats = availableSeats.slice(0, 5);
         seatsToReserve = hotSeats
@@ -70,8 +77,8 @@ export async function POST(request: NextRequest) {
 
       return {
         userId: user.id,
-        seatIds: seatsToReserve.map((s) => s.id),
-        seatLabels: seatsToReserve.map((s) => s.seatLabel),
+        seatIds: seatsToReserve.map((s: PrismaSeatWithRelations) => s.id),
+        seatLabels: seatsToReserve.map((s: PrismaSeatWithRelations) => s.seatLabel),
       };
     });
 
@@ -130,11 +137,11 @@ export async function POST(request: NextRequest) {
       timestamp: new Date(),
     });
 
-    const finalSeats: SeatWithReservation[] = await prisma.seat.findMany({
+    const finalSeats: PrismaSeatWithRelations[] = await prisma.seat.findMany({
       include: { reservations: { take: 1 } },
     });
     const reservedCount = finalSeats.filter(
-      (s) => s.reservations.length > 0
+      (s: PrismaSeatWithRelations) => s.reservations.length > 0
     ).length;
 
     return NextResponse.json({
