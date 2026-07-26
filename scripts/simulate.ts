@@ -18,6 +18,14 @@ interface AttemptResult {
   duration: number;
 }
 
+interface SeatWithReservation {
+  id: string;
+  seatLabel: string;
+  rowChar: string;
+  seatNumber: number;
+  reservations: { id: string }[];
+}
+
 /**
  * Log in a user via NextAuth credentials endpoint and return the session cookie.
  */
@@ -66,12 +74,12 @@ async function simulateConcurrentReservations(
   console.log(`========================================\n`);
 
   // Get all available seats
-  const allSeats = await prisma.seat.findMany({
+  const allSeats: SeatWithReservation[] = await prisma.seat.findMany({
     include: { reservations: { take: 1 } },
   });
 
   const availableSeats = allSeats.filter(
-    (s: (typeof allSeats)[number]) => s.reservations.length === 0
+    (s) => s.reservations.length === 0
   );
 
   if (availableSeats.length === 0) {
@@ -132,7 +140,7 @@ async function simulateConcurrentReservations(
     );
 
     // 20% target hot seats for high contention
-    let selectedSeats: typeof availableSeats;
+    let selectedSeats: SeatWithReservation[];
     if (index < concurrency * 0.2) {
       const hotSeats = availableSeats.slice(0, 5);
       selectedSeats = hotSeats
@@ -246,11 +254,11 @@ async function simulateConcurrentReservations(
   const duration = Date.now() - startTime;
 
   // Verify no double-bookings
-  const finalSeats = await prisma.seat.findMany({
+  const finalSeats: SeatWithReservation[] = await prisma.seat.findMany({
     include: { reservations: { take: 1 } },
   });
   const reservedCount = finalSeats.filter(
-    (s: (typeof finalSeats)[number]) => s.reservations.length > 0
+    (s) => s.reservations.length > 0
   ).length;
 
   console.log(`\n========================================`);

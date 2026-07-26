@@ -95,11 +95,26 @@ export async function createReservation(
   }
 }
 
+interface SeatWithUser {
+  id: string;
+  seatLabel: string;
+  rowChar: string;
+  seatNumber: number;
+  reservations: {
+    id: string;
+    reservation: {
+      id: string;
+      createdAt: Date;
+      user: { id: string; email: string; name: string } | null;
+    } | null;
+  }[];
+}
+
 /**
  * Get all seats with their reservation status.
  */
 export async function getAllSeats() {
-  const seats = await prisma.seat.findMany({
+  const seats: SeatWithUser[] = await prisma.seat.findMany({
     orderBy: [{ rowChar: "asc" }, { seatNumber: "asc" }],
     include: {
       reservations: {
