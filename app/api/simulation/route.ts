@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       );
 
       // Deliberately create contention: first 20% target hot seats
-      let selectedSeats;
+      let selectedSeats: typeof availableSeats;
       if (index < concurrency * 0.2) {
         const hotSeats = availableSeats.slice(0, 5);
         selectedSeats = hotSeats

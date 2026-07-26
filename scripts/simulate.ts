@@ -132,7 +132,7 @@ async function simulateConcurrentReservations(
     );
 
     // 20% target hot seats for high contention
-    let selectedSeats;
+    let selectedSeats: typeof availableSeats;
     if (index < concurrency * 0.2) {
       const hotSeats = availableSeats.slice(0, 5);
       selectedSeats = hotSeats
