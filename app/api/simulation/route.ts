@@ -32,7 +32,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const availableSeats = allSeats.filter((s) => s.reservations.length === 0);
+    const availableSeats = allSeats.filter(
+      (s: (typeof allSeats)[number]) => s.reservations.length === 0
+    );
 
     if (availableSeats.length === 0) {
       return NextResponse.json(
@@ -149,7 +151,7 @@ export async function POST(request: NextRequest) {
       include: { reservations: { take: 1 } },
     });
     const reservedCount = finalSeats.filter(
-      (s) => s.reservations.length > 0
+      (s: (typeof finalSeats)[number]) => s.reservations.length > 0
     ).length;
 
     return NextResponse.json({
