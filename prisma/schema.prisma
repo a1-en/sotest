@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  name         String
+  passwordHash String
+  reservations Reservation[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+model Seat {
+  id              String           @id @default(cuid())
+  seatLabel       String           @unique
+  rowChar         String
+  seatNumber      Int
+  reservations    ReservationSeat[]
+  createdAt       DateTime         @default(now())
+
+  @@unique([rowChar, seatNumber])
+}
+
+model Reservation {
+  id               String           @id @default(cuid())
+  userId           String
+  user             User             @relation(fields: [userId], references: [id])
+  reservationSeats ReservationSeat[]
+  createdAt        DateTime         @default(now())
+}
+
+model ReservationSeat {
+  id            String      @id @default(cuid())
+  reservationId String
+  seatId        String      @unique
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  seat          Seat        @relation(fields: [seatId], references: [id])
+  createdAt     DateTime    @default(now())
+}
